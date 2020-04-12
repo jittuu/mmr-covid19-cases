@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Covid19 cases in Myanmar</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
+          "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      }
+      circle {
+        transition: fill 0.4s ease;
+      }
+      .selected {
+        fill: #ff7f0e;
+        stroke: #ff7f0e;
+      }
+
+      .heart {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Coivd19 Cases in Myanmar</h1>
+    <span>Visualized by Soe Moe</span>
+
+    <hr />
+    <div id="observablehq-ccb0eb13"></div>
+    <script type="module">
+      import {
+        Runtime,
+        Inspector,
+      } from "https://cdn.jsdelivr.net/npm/@observablehq/runtime@4/dist/runtime.js";
+      import define from "https://api.observablehq.com/@soemoe/covid19-cases-in-myanmar.js?v=3";
+      const inspect = Inspector.into("#observablehq-ccb0eb13");
+      new Runtime().module(define, (name) => name === "chart" && inspect());
+    </script>
+  </body>
+</html>
