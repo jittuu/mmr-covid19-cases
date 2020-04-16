@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title></title>
+    <style>
+      circle {
+        transition: fill 0.5s ease;
+      }
+      .selected {
+        fill: #2c2f33;
+        stroke-width: 0;
+      }
+      .current {
+        fill: #d9534f;
+      }
+      .selected-line {
+        stroke: #2c2f33;
+      }
+      #version {
+        font-family: monospace;
+        font-size: 8;
+        color: grey; 
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" />
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script>
+      const dataLoaded = setInterval(function () {
+        if (window.data) {
+          clearInterval(dataLoaded);
+          main();
+        }
+      }, 200);
+
+      function main() {
+        const data = window.data;
+
+        const width =
+          (window.innerWidth ||
+            document.documentElement.clientWidth ||
+            document.body.clientWidth) * 0.9;
+        const height =
+          window.innerHeight ||
+          document.documentElement.clientHeight ||
+          document.body.clientHeight;
+
+        const drag = (simulation) => {
+          function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          }
+
+          function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+          }
+
+          function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+          }
+
+          return d3
+            .drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended);
+        };
+
+        const findConnectedNodes = (id, curNodes) => {
+          curNodes.push(id);
+
+          const linkedNodeIds = data.links
+            .filter((l) => l.source === id || l.target === id)
+            .map((l) => (l.source === id ? l.target : l.source));
+
+          const newNodeIds = linkedNodeIds.filter(
+            (i) => curNodes.indexOf(i) < 0,
+          );
+          if (newNodeIds.length > 0) {
+            newNodeIds.forEach((ni) => {
+              findConnectedNodes(ni, curNodes);
+            });
+          }
+          return curNodes;
+        };
+
+        const chart = () => {
+          const links = data.links.map((d) => Object.create(d));
+          const nodes = data.nodes.map((d) => Object.create(d));
+          const fcolor = window.fcolor || '#4e79a7';
+          const simulation = d3
+            .forceSimulation(nodes)
+            .force(
+              'link',
+              d3
+                .forceLink(links)
+                .id((d) => d.id)
+                .distance(50),
+            )
+            .force('charge', d3.forceManyBody().strength(-80))
+            .force('x', d3.forceX())
+            .force('y', d3.forceY());
+
+          const svg = d3
+            .create('svg')
+            .attr('viewBox', [-width / 2, -height / 2, width, height]);
+
+          //add encompassing group for the zoom
+          var g = svg.append('g').attr('class', 'everything');
+
+          const link = g
+            .append('g')
+            .attr('stroke', fcolor)
+            .attr('stroke-opacity', 0.6)
+            .selectAll('line')
+            .data(links)
+            .join('line')
+            .attr('stroke-width', 1);
+
+          const node = g
+            .append('g')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2)
+            .selectAll('circle')
+            .data(nodes)
+            .join('circle')
+            .attr('r', 15)
+            .attr('fill', (d) => (Number.isInteger(d.id) ? fcolor : '#c7bbbb'))
+            .call(drag(simulation));
+
+          var zoom_handler = d3.zoom().on('zoom', zoom_actions);
+          zoom_handler(svg);
+
+          svg.on('click', () => {
+            g.selectAll('circle').classed('selected', false);
+            g.selectAll('circle').classed('current', false);
+            window.ReactNativeWebView &&
+              window.ReactNativeWebView.postMessage('');
+          });
+
+          node.on('click', function (d) {
+            const connectedNodes = findConnectedNodes(d.id, []);
+            g.selectAll('circle').classed(
+              'selected',
+              (c) =>
+                Number.isInteger(c.id) && connectedNodes.indexOf(c.id) > -1,
+            );
+            g.selectAll('circle').classed('current', (c) => c.id === d.id);
+
+            g.selectAll('line').classed(
+              'selected-line',
+              (c) => {
+                const lk = data.links[c.index];
+                return (
+                  connectedNodes.indexOf(lk.source) > -1 ||
+                  connectedNodes.indexOf(lk.target) > -1
+                );
+              },
+              { passive: true },
+            );
+            d3.event.stopPropagation();
+            window.ReactNativeWebView &&
+              window.ReactNativeWebView.postMessage(
+                `${JSON.stringify({
+                  id: d.id,
+                  type: '@cases/selected',
+                  cluster_links: connectedNodes,
+                })}`,
+              );
+          });
+
+          const label = g
+            .append('g')
+            .selectAll('text')
+            .data(nodes)
+            .join('text')
+            .attr('font-size', 12)
+            .attr('fill', '#fff')
+            .attr('pointer-events', 'none')
+            .text((d) => d.id);
+
+          simulation.on('tick', () => {
+            link
+              .attr('x1', (d) => d.source.x)
+              .attr('y1', (d) => d.source.y)
+              .attr('x2', (d) => d.target.x)
+              .attr('y2', (d) => d.target.y);
+
+            node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
+
+            label
+              .attr('dx', (d) => d.x - (d.id < 10 ? 3 : 6))
+              .attr('dy', (d) => d.y + 3);
+          });
+
+          function zoom_actions() {
+            g.attr('transform', d3.event.transform);
+          }
+          return svg.node();
+        };
+
+        const svg = chart();
+        document.getElementById('root').append(svg);
+      }
+    </script>
+    <span id="version">v1</span>
+  </body>
+</html>
